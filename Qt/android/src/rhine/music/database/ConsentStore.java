@@ -38,6 +38,15 @@ public final class ConsentStore {
      */
     private static final boolean BUGLY_NATIVE_MONITOR = true;
 
+    /**
+     * RHINE-LOWEND：低配包不启动 Clarity。
+     *
+     * 它按约 10 秒一次的节奏往主线程排 UploadSessionJob，与换页重绘撞车时会把单帧推到
+     * ANR 边缘（见 docs/ANDROID.md §2.7）。侧载用户也拿不到它的分析产物。改成 false
+     * 即恢复上游行为；Bugly 仍然只在 CN 同意后启动，不受此开关影响。
+     */
+    private static final boolean CLARITY_ENABLED = false;
+
     // 分开记幂等标志：先按"其他地区"启动过 Clarity，随后又拿到 CN 同意时，
     // Bugly 不能被前一个标志挡掉。
     private static boolean clarityStarted;
@@ -80,15 +89,19 @@ public final class ConsentStore {
         final Context application = context.getApplicationContext();
         if (!clarityStarted) {
             clarityStarted = true;
-            try {
-                final ClarityConfig config = new ClarityConfig(CLARITY_PROJECT_ID);
-                // None：平时不打日志。排查初始化问题时可临时改成 LogLevel.Verbose。
-                config.setLogLevel(LogLevel.None);
-                Clarity.initialize(application, config);
-                Log.i(TAG, "Clarity initialized after consent");
-            } catch (Throwable error) {
-                // 分析 SDK 起不来不该拖垮应用。
-                Log.w(TAG, "Clarity initialization failed", error);
+            if (!CLARITY_ENABLED) {
+                Log.i(TAG, "Clarity disabled (low-end build)");
+            } else {
+                try {
+                    final ClarityConfig config = new ClarityConfig(CLARITY_PROJECT_ID);
+                    // None：平时不打日志。排查初始化问题时可临时改成 LogLevel.Verbose。
+                    config.setLogLevel(LogLevel.None);
+                    Clarity.initialize(application, config);
+                    Log.i(TAG, "Clarity initialized after consent");
+                } catch (Throwable error) {
+                    // 分析 SDK 起不来不该拖垮应用。
+                    Log.w(TAG, "Clarity initialization failed", error);
+                }
             }
         }
         if (region != GeoIp.REGION_CN || buglyStarted) {
