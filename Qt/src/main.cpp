@@ -834,6 +834,22 @@ static void activateWindow(QWindow *window) {
  * 离线测试与正式播放沿用同一入口，资源只从独立应用读取。
  */
 int main(int argc, char **argv) {
+#if defined(Q_OS_ANDROID)
+    // RHINE-LOWEND：低配机的默认画质档，必须抢在所有组件读环境变量之前设置。
+    //
+    // Android 的帧时间大头是 Hud 的软件栅格：QPainter 把整窗（Reno6 横屏是
+    // 2400×1080 设备像素）重画一遍，再整张纹理上传。换页、启动动画、进详情这三个
+    // 「整块重画」的时刻最费，而 3D 的 submit 只有几毫秒——所以压 HUD 的像素数，
+    // 渲染分辨率只小幅下调，尽量不牺牲 3D 观感。
+    //
+    // 显式环境变量永远优先（RHINE_HUD_TEXTURE_SCALE=100 即可恢复上游的锐度）。
+    if (qEnvironmentVariableIsEmpty("RHINE_HUD_TEXTURE_SCALE")) {
+        qputenv("RHINE_HUD_TEXTURE_SCALE", "70");
+    }
+    if (qEnvironmentVariableIsEmpty("RHINE_ANDROID_RENDER_SCALE")) {
+        qputenv("RHINE_ANDROID_RENDER_SCALE", "65");
+    }
+#endif
 #if defined(Q_OS_ANDROID) && RHINE_ANDROID_SIGNAL_DIAG
     // 段错误诊断链必须抢在一切组件（Qt 插件、Node、GPU 驱动）可能安装的处理之前。
     rhineInstallSignalDiag();
